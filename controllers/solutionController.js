@@ -5,9 +5,15 @@ import User from '../models/User.js';
 // Get all solutions with filters
 export const getSolutions = async (req, res) => {
   try {
-    const { platform, difficulty, language, search, sortBy = 'averageRating', limit = 20 } = req.query;
+    const { platform, difficulty, language, search, sortBy = 'averageRating', limit = 20, admin } = req.query;
     
-    let filter = { isApproved: true };
+    let filter = {};
+    
+    // If not admin, only show approved solutions
+    if (admin !== 'true' && req.user?.role !== 'admin') {
+      filter.isApproved = true;
+    }
+    
     if (platform) filter.platform = platform;
     if (difficulty) filter.difficulty = difficulty;
     if (language) filter.language = language;
@@ -80,7 +86,8 @@ export const createSolution = async (req, res) => {
       timeComplexity: timeComplexity || '',
       spaceComplexity: spaceComplexity || '',
       tags: tags || [],
-      author: req.user._id
+      author: req.user._id,
+      isApproved: req.user.role === 'admin' ? true : false  // Auto-approve if admin
     });
     
     // Update platform solution count
@@ -88,9 +95,80 @@ export const createSolution = async (req, res) => {
       $inc: { solutionCount: 1 }
     });
     
-    res.status(201).json({ success: true, data: solution, message: 'Solution submitted successfully' });
+    res.status(201).json({ 
+      success: true, 
+      data: solution, 
+      message: req.user.role === 'admin' ? 'Solution published successfully!' : 'Solution submitted for review' 
+    });
   } catch (error) {
     console.error('Create solution error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Admin approve solution
+export const approveSolution = async (req, res) => {
+  try {
+    // Check if user is admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Admin access required' });
+    }
+    
+    const solution = await Solution.findById(req.params.id);
+    if (!solution) {
+      return res.status(404).json({ success: false, message: 'Solution not found' });
+    }
+    
+    solution.isApproved = true;
+    await solution.save();
+    
+    res.json({ success: true, message: 'Solution approved successfully' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Admin reject/delete solution
+export const rejectSolution = async (req, res) => {
+  try {
+    // Check if user is admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Admin access required' });
+    }
+    
+    const solution = await Solution.findById(req.params.id);
+    if (!solution) {
+      return res.status(404).json({ success: false, message: 'Solution not found' });
+    }
+    
+    // Get platform to decrement count
+    await Platform.findByIdAndUpdate(solution.platform, {
+      $inc: { solutionCount: -1 }
+    });
+    
+    await Solution.findByIdAndDelete(req.params.id);
+    
+    res.json({ success: true, message: 'Solution rejected and deleted' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Get pending solutions (admin only)
+export const getPendingSolutions = async (req, res) => {
+  try {
+    // Check if user is admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Admin access required' });
+    }
+    
+    const solutions = await Solution.find({ isApproved: false })
+      .populate('platform', 'name slug color')
+      .populate('author', 'name email')
+      .sort({ createdAt: -1 });
+      
+    res.json({ success: true, data: solutions });
+  } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
