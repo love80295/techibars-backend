@@ -60,17 +60,25 @@ export const createSolution = async (req, res) => {
   try {
     const { platform, problemId, problemTitle, problemUrl, difficulty, approach, code, language, timeComplexity, spaceComplexity, tags } = req.body;
     
+    // Validate required fields
+    if (!platform || !problemId || !problemTitle || !approach || !code || !language) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Missing required fields: platform, problemId, problemTitle, approach, code, language' 
+      });
+    }
+    
     const solution = await Solution.create({
       platform,
       problemId,
       problemTitle,
-      problemUrl,
-      difficulty,
+      problemUrl: problemUrl || '',
+      difficulty: difficulty || 'Medium',
       approach,
       code,
       language,
-      timeComplexity,
-      spaceComplexity,
+      timeComplexity: timeComplexity || '',
+      spaceComplexity: spaceComplexity || '',
       tags: tags || [],
       author: req.user._id
     });
@@ -80,8 +88,9 @@ export const createSolution = async (req, res) => {
       $inc: { solutionCount: 1 }
     });
     
-    res.status(201).json({ success: true, data: solution, message: 'Solution submitted for review' });
+    res.status(201).json({ success: true, data: solution, message: 'Solution submitted successfully' });
   } catch (error) {
+    console.error('Create solution error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -94,6 +103,11 @@ export const rateSolution = async (req, res) => {
     
     if (!solution) {
       return res.status(404).json({ success: false, message: 'Solution not found' });
+    }
+    
+    // Validate score
+    if (!score || score < 1 || score > 5) {
+      return res.status(400).json({ success: false, message: 'Score must be between 1 and 5' });
     }
     
     // Check if user already rated
@@ -176,9 +190,13 @@ export const addComment = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Solution not found' });
     }
     
+    if (!content || content.trim() === '') {
+      return res.status(400).json({ success: false, message: 'Comment content is required' });
+    }
+    
     solution.comments.push({
       user: req.user._id,
-      content,
+      content: content.trim(),
       createdAt: new Date()
     });
     
@@ -197,14 +215,19 @@ export const bookmarkSolution = async (req, res) => {
     const user = await User.findById(req.user._id);
     const solutionId = req.params.id;
     
-    if (user.bookmarkedSolutions.includes(solutionId)) {
-      user.bookmarkedSolutions = user.bookmarkedSolutions.filter(id => id.toString() !== solutionId);
-    } else {
-      user.bookmarkedSolutions.push(solutionId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
     }
     
-    await user.save();
-    res.json({ success: true, bookmarked: !user.bookmarkedSolutions.includes(solutionId) });
+    if (user.bookmarkedSolutions.includes(solutionId)) {
+      user.bookmarkedSolutions = user.bookmarkedSolutions.filter(id => id.toString() !== solutionId);
+      await user.save();
+      res.json({ success: true, bookmarked: false, message: 'Removed from bookmarks' });
+    } else {
+      user.bookmarkedSolutions.push(solutionId);
+      await user.save();
+      res.json({ success: true, bookmarked: true, message: 'Added to bookmarks' });
+    }
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -223,52 +246,84 @@ export const getBookmarkedSolutions = async (req, res) => {
   }
 };
 
-// Complexity analyzer (simple version)
+// Complexity analyzer (pattern-based detection)
 export const analyzeComplexity = async (req, res) => {
   try {
     const { code, language } = req.body;
     
+    if (!code) {
+      return res.status(400).json({ success: false, message: 'Code is required' });
+    }
+    
     // Simple pattern-based complexity detection
     let timeComplexity = "O(n)";
     let spaceComplexity = "O(1)";
+    let explanation = "";
     
-    // Detect nested loops -> O(n²)
-    const nestedLoopPattern = /for\s*\([^)]*\)\s*\{[\s\S]*?for\s*\([^)]*\)\s*\{/g;
-    if (nestedLoopPattern.test(code)) {
+    // Remove comments for better pattern detection
+    const cleanCode = code.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+    
+    // Count loops
+    const singleLoopCount = (cleanCode.match(/for\s*\([^)]*\)\s*\{/g) || []).length;
+    const whileLoopCount = (cleanCode.match(/while\s*\([^)]*\)\s*\{/g) || []).length;
+    const nestedLoopCount = (cleanCode.match(/for\s*\([^)]*\)\s*\{[\s\S]*?for\s*\([^)]*\)\s*\{/g) || []).length;
+    
+    // Detect time complexity
+    if (nestedLoopCount > 0) {
       timeComplexity = "O(n²)";
+      explanation = "Nested loops detected";
+    } else if ((singleLoopCount + whileLoopCount) > 1) {
+      timeComplexity = "O(n)";
+      explanation = "Multiple sequential loops (O(n) each, total O(n))";
+    } else if ((singleLoopCount + whileLoopCount) === 1) {
+      timeComplexity = "O(n)";
+      explanation = "Single loop detected";
+    } else {
+      const hasRecursion = /function\s+\w+\s*\([^)]*\)\s*\{[\s\S]*?\1\s*\(/g.test(cleanCode);
+      if (hasRecursion) {
+        timeComplexity = "O(2^n)";
+        explanation = "Recursion detected (may be exponential)";
+      } else {
+        timeComplexity = "O(1)";
+        explanation = "No loops detected - constant time";
+      }
     }
     
-    // Detect while loop with division -> O(log n)
-    const logPattern = /while\s*\([^)]*\/\s*2[^)]*\)/g;
-    if (logPattern.test(code)) {
-      timeComplexity = "O(log n)";
-    }
+    // Detect space complexity
+    const hasArray = /new\s+Array\(|\[[^\]]*\]/g.test(cleanCode);
+    const hasHashSet = /Set\(|new\s+Set\(/g.test(cleanCode);
+    const hasHashMap = /Map\(|new\s+Map\(|\{\}[^=]|dict\(/g.test(cleanCode);
+    const hasMatrix = /\[\[\]\]|new\s+Array\([^)]*\)\.fill\([^)]*\)\.map/g.test(cleanCode);
+    const hasRecursionStack = /function\s+\w+\s*\([^)]*\)\s*\{[\s\S]*?\1\s*\(/g.test(cleanCode);
     
-    // Detect sorting -> O(n log n)
-    const sortPattern = /sort\(|sorted\(/g;
-    if (sortPattern.test(code)) {
-      timeComplexity = "O(n log n)";
-    }
-    
-    // Detect hash map usage -> O(n) space
-    const hashPattern = /Map\(|HashMap\(|\{\}|dict\(/g;
-    if (hashPattern.test(code)) {
-      spaceComplexity = "O(n)";
-    }
-    
-    // Detect 2D array -> O(n²) space
-    const matrixPattern = /\[\[\]\]|new\s*Array\([^)]*\)\.fill\([^)]*\)\.map/g;
-    if (matrixPattern.test(code)) {
+    if (hasMatrix) {
       spaceComplexity = "O(n²)";
+      explanation += " | Matrix/2D array detected";
+    } else if (hasArray || hasHashSet || hasHashMap) {
+      spaceComplexity = "O(n)";
+      explanation += " | Auxiliary data structure detected";
+    } else if (hasRecursionStack) {
+      spaceComplexity = "O(n)";
+      explanation += " | Recursion call stack usage";
+    } else {
+      spaceComplexity = "O(1)";
+      explanation += " | Constant space";
     }
     
     res.json({
       success: true,
       timeComplexity,
       spaceComplexity,
-      explanation: `Analysis based on code patterns. Time: ${timeComplexity}, Space: ${spaceComplexity}`
+      explanation: explanation.trim()
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error('Complexity analysis error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message,
+      timeComplexity: "O(n)",
+      spaceComplexity: "O(1)",
+      explanation: "Could not analyze. Please enter manually."
+    });
   }
 };

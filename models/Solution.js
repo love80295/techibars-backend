@@ -50,8 +50,15 @@ const solutionSchema = new mongoose.Schema({
     required: true
   },
   ratings: [{
-    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    score: { type: Number, min: 1, max: 5 }
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    score: {
+      type: Number,
+      min: 1,
+      max: 5
+    }
   }],
   averageRating: {
     type: Number,
@@ -70,9 +77,18 @@ const solutionSchema = new mongoose.Schema({
     default: 0
   },
   comments: [{
-    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    content: { type: String, required: true },
-    createdAt: { type: Date, default: Date.now }
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    content: {
+      type: String,
+      required: true
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now
+    }
   }],
   tags: [String],
   isApproved: {
@@ -83,17 +99,7 @@ const solutionSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Text index for search functionality
-solutionSchema.index({ problemTitle: 'text', approach: 'text', code: 'text' });
-
-// Update average rating before saving
-solutionSchema.pre('save', function(next) {
-  if (this.ratings.length > 0) {
-    const total = this.ratings.reduce((sum, r) => sum + r.score, 0);
-    this.averageRating = total / this.ratings.length;
-  }
-  next();
-});
+// NO pre-save hook here - removed to avoid "next is not a function" error
 
 const Solution = mongoose.model('Solution', solutionSchema);
 export default Solution;
