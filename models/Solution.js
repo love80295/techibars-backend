@@ -34,7 +34,7 @@ const solutionSchema = new mongoose.Schema({
   language: {
     type: String,
     required: true,
-    enum: ['Python', 'Java', 'C++', 'JavaScript', 'TypeScript', 'Go', 'Rust', 'Ruby', 'Swift']
+    enum: ['Python', 'Java', 'C++', 'JavaScript', 'TypeScript', 'Go', 'Rust', 'Ruby', 'Swift', 'C#', 'PHP', 'Kotlin', 'Scala', 'Dart', 'HTML/CSS', 'SQL']
   },
   timeComplexity: {
     type: String,
@@ -98,8 +98,6 @@ const solutionSchema = new mongoose.Schema({
 }, {
   timestamps: true
 });
-
-// NO pre-save hook here - removed to avoid "next is not a function" error
 
 const Solution = mongoose.model('Solution', solutionSchema);
 export default Solution;
