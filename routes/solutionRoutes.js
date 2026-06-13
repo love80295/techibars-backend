@@ -3,6 +3,8 @@ import {
   getSolutions,
   getSolutionById,
   createSolution,
+  updateSolution,
+  deleteSolution,
   rateSolution,
   upvoteSolution,
   downvoteSolution,
@@ -25,6 +27,8 @@ router.get('/:id', getSolutionById);
 // Protected routes (require login)
 router.get('/bookmarked', protect, getBookmarkedSolutions);
 router.post('/', protect, createSolution);
+router.put('/:id', protect, updateSolution);
+router.delete('/:id', protect, deleteSolution);
 router.post('/:id/rate', protect, rateSolution);
 router.post('/:id/upvote', protect, upvoteSolution);
 router.post('/:id/downvote', protect, downvoteSolution);

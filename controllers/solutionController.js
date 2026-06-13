@@ -87,7 +87,7 @@ export const createSolution = async (req, res) => {
       spaceComplexity: spaceComplexity || '',
       tags: tags || [],
       author: req.user._id,
-      isApproved: req.user.role === 'admin' ? true : false  // Auto-approve if admin
+      isApproved: req.user.role === 'admin' ? true : false
     });
     
     // Update platform solution count
@@ -102,6 +102,61 @@ export const createSolution = async (req, res) => {
     });
   } catch (error) {
     console.error('Create solution error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Update solution (for admin approval)
+export const updateSolution = async (req, res) => {
+  try {
+    const solution = await Solution.findById(req.params.id);
+    
+    if (!solution) {
+      return res.status(404).json({ success: false, message: 'Solution not found' });
+    }
+    
+    // Allow updating isApproved field
+    if (req.body.isApproved !== undefined) {
+      solution.isApproved = req.body.isApproved;
+    }
+    
+    // Update other fields if provided
+    if (req.body.title) solution.title = req.body.title;
+    if (req.body.content) solution.content = req.body.content;
+    if (req.body.language) solution.language = req.body.language;
+    if (req.body.approach) solution.approach = req.body.approach;
+    if (req.body.code) solution.code = req.body.code;
+    if (req.body.timeComplexity) solution.timeComplexity = req.body.timeComplexity;
+    if (req.body.spaceComplexity) solution.spaceComplexity = req.body.spaceComplexity;
+    
+    await solution.save();
+    
+    res.json({ success: true, data: solution, message: 'Solution updated successfully' });
+  } catch (error) {
+    console.error('Update solution error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Delete solution
+export const deleteSolution = async (req, res) => {
+  try {
+    const solution = await Solution.findById(req.params.id);
+    
+    if (!solution) {
+      return res.status(404).json({ success: false, message: 'Solution not found' });
+    }
+    
+    // Update platform solution count
+    await Platform.findByIdAndUpdate(solution.platform, {
+      $inc: { solutionCount: -1 }
+    });
+    
+    await Solution.findByIdAndDelete(req.params.id);
+    
+    res.json({ success: true, message: 'Solution deleted successfully' });
+  } catch (error) {
+    console.error('Delete solution error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
