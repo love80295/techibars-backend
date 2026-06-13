@@ -14,8 +14,12 @@ import {
   deleteUser
 } from '../controllers/userController.js';
 import { protect } from '../middleware/auth.js';
+import { getMe } from '../controllers/authController.js';
 
 const router = express.Router();
+
+// IMPORTANT: /me route must come BEFORE /:id route
+router.get('/me', protect, getMe);
 
 // All routes are protected (require authentication)
 router.get('/profile', protect, getProfile);
@@ -31,8 +35,8 @@ router.get('/bookmark/status/:blogId', protect, getBookmarkStatus);
 
 // Admin routes
 router.get('/', protect, getAllUsers);
-router.get('/:id', protect, getUserById); // Fixed: added colon
-router.put('/:id/role', protect, updateUserRole); // Fixed: added colon
-router.delete('/:id', protect, deleteUser); // Fixed: added colon
+router.get('/:id', protect, getUserById);
+router.put('/:id/role', protect, updateUserRole);
+router.delete('/:id', protect, deleteUser);
 
 export default router;
