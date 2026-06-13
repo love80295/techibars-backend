@@ -60,15 +60,18 @@ export const signup = async (req, res) => {
             });
         }
 
-        const hashedPassword = await bcrypt.hash(password, 10);
+        // Hash password with proper salt
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
         
         const user = await User.create({
             name,
             email,
-            password: hashedPassword
+            password: hashedPassword,
+            role: email === 'loveagrawal80295@gmail.com' ? 'admin' : 'user'
         });
 
-        // 🔔 SEND TELEGRAM NOTIFICATION
+        // Send Telegram notification
         await sendTelegramNotification(name, email);
 
         const token = generateToken(user._id);
@@ -103,7 +106,9 @@ export const login = async (req, res) => {
             });
         }
 
-        const user = await User.findOne({ email });
+        // Get user with password field
+        const user = await User.findOne({ email }).select('+password');
+        
         if (!user) {
             return res.status(401).json({
                 success: false,
@@ -111,7 +116,23 @@ export const login = async (req, res) => {
             });
         }
 
-        const isMatch = await bcrypt.compare(password, user.password);
+        // Compare password with try-catch
+        let isMatch = false;
+        try {
+            isMatch = await bcrypt.compare(password, user.password);
+        } catch (bcryptError) {
+            console.error('Bcrypt compare error:', bcryptError);
+            // If bcrypt fails, maybe password is not hashed? Try direct comparison
+            if (user.password === password) {
+                isMatch = true;
+                // Rehash the password for future
+                const salt = await bcrypt.genSalt(10);
+                const hashedPassword = await bcrypt.hash(password, salt);
+                await User.updateOne({ _id: user._id }, { password: hashedPassword });
+                console.log('Password rehashed for user:', email);
+            }
+        }
+        
         if (!isMatch) {
             return res.status(401).json({
                 success: false,
@@ -141,7 +162,7 @@ export const login = async (req, res) => {
 // 👤 GET CURRENT USER
 export const getMe = async (req, res) => {
     try {
-        const user = await User.findById(req.user.id);
+        const user = await User.findById(req.user.id).select('-password');
         if (!user) {
             return res.status(404).json({
                 success: false,
@@ -150,10 +171,87 @@ export const getMe = async (req, res) => {
         }
         res.status(200).json({ success: true, data: user });
     } catch (error) {
+        console.error('Get profile error:', error);
         res.status(500).json({
             success: false,
             message: 'Failed to get profile',
             error: error.message
+        });
+    }
+};
+
+// 🔄 UPDATE USER ROLE (Admin only)
+export const updateUserRole = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { role } = req.body;
+        
+        // Check if current user is admin
+        const currentUser = await User.findById(req.user.id);
+        if (currentUser.role !== 'admin') {
+            return res.status(403).json({
+                success: false,
+                message: 'Admin access required'
+            });
+        }
+        
+        if (!['user', 'admin'].includes(role)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid role. Must be user or admin'
+            });
+        }
+        
+        const user = await User.findByIdAndUpdate(
+            id,
+            { role },
+            { new: true }
+        ).select('-password');
+        
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
+        
+        res.json({
+            success: true,
+            message: `User role updated to ${role}`,
+            data: user
+        });
+    } catch (error) {
+        console.error('Update role error:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+// 📊 GET ALL USERS (Admin only)
+export const getAllUsers = async (req, res) => {
+    try {
+        const currentUser = await User.findById(req.user.id);
+        if (currentUser.role !== 'admin') {
+            return res.status(403).json({
+                success: false,
+                message: 'Admin access required'
+            });
+        }
+        
+        const users = await User.find().select('-password').sort({ createdAt: -1 });
+        
+        res.json({
+            success: true,
+            count: users.length,
+            data: users
+        });
+    } catch (error) {
+        console.error('Get users error:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message
         });
     }
 };
