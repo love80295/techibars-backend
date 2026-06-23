@@ -16,15 +16,34 @@ import {
   rejectSolution,
   getPendingSolutions
 } from '../controllers/solutionController.js';
+
+// 🆕 Import AI Controller
+import { 
+  detectTopics, 
+  explainSolution,
+  getAIStatus
+} from '../controllers/aiController.js';
+
 import { protect } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// Public routes
+// ============================================================
+// PUBLIC ROUTES
+// ============================================================
 router.get('/', getSolutions);
 router.get('/:id', getSolutionById);
 
-// Protected routes (require login)
+// ============================================================
+// AI ROUTES (Protected)
+// ============================================================
+router.post('/detect-topics', protect, detectTopics);
+router.get('/:id/explain', protect, explainSolution);
+router.get('/ai/status', protect, getAIStatus);
+
+// ============================================================
+// PROTECTED ROUTES (Require Login)
+// ============================================================
 router.get('/bookmarked', protect, getBookmarkedSolutions);
 router.post('/', protect, createSolution);
 router.put('/:id', protect, updateSolution);
@@ -36,7 +55,9 @@ router.post('/:id/comment', protect, addComment);
 router.post('/:id/bookmark', protect, bookmarkSolution);
 router.post('/analyze/complexity', protect, analyzeComplexity);
 
-// Admin routes
+// ============================================================
+// ADMIN ROUTES
+// ============================================================
 router.get('/admin/pending', protect, getPendingSolutions);
 router.put('/admin/approve/:id', protect, approveSolution);
 router.delete('/admin/reject/:id', protect, rejectSolution);

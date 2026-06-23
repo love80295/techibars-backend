@@ -94,10 +94,39 @@ const solutionSchema = new mongoose.Schema({
   isApproved: {
     type: Boolean,
     default: false
+  },
+  // ============================================================
+  // 🆕 AI-GENERATED FIELDS
+  // ============================================================
+  topics: [{
+    type: String,
+    index: true  // For faster filtering
+  }],
+  combinedTopics: {
+    type: String,
+    default: ''
+  },
+  aiExplanation: {
+    summary: { type: String, default: '' },
+    steps: [{
+      step: Number,
+      description: String
+    }],
+    insights: [String],
+    tips: [String],
+    generatedAt: { type: Date, default: null }
+  },
+  source: {
+    type: String,
+    enum: ['manual', 'leetcode-sync'],
+    default: 'manual'
   }
 }, {
   timestamps: true
 });
+
+// 🆕 Index for topic filtering
+solutionSchema.index({ topics: 1 });
 
 const Solution = mongoose.model('Solution', solutionSchema);
 export default Solution;
