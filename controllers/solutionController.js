@@ -35,6 +35,7 @@ export const getSolutions = async (req, res) => {
       
     res.json({ success: true, data: solutions });
   } catch (error) {
+    console.error('Get solutions error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -57,6 +58,7 @@ export const getSolutionById = async (req, res) => {
     
     res.json({ success: true, data: solution });
   } catch (error) {
+    console.error('Get solution by ID error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -115,17 +117,19 @@ export const updateSolution = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Solution not found' });
     }
     
-    // Allow updating isApproved field
+    // Only admin can approve
+    if (req.body.isApproved !== undefined && req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Only admin can approve solutions' });
+    }
+    
+    // Update fields
     if (req.body.isApproved !== undefined) {
       solution.isApproved = req.body.isApproved;
     }
-    
-    // Update other fields if provided
-    if (req.body.title) solution.title = req.body.title;
-    if (req.body.content) solution.content = req.body.content;
-    if (req.body.language) solution.language = req.body.language;
+    if (req.body.problemTitle) solution.problemTitle = req.body.problemTitle;
     if (req.body.approach) solution.approach = req.body.approach;
     if (req.body.code) solution.code = req.body.code;
+    if (req.body.language) solution.language = req.body.language;
     if (req.body.timeComplexity) solution.timeComplexity = req.body.timeComplexity;
     if (req.body.spaceComplexity) solution.spaceComplexity = req.body.spaceComplexity;
     
@@ -161,11 +165,14 @@ export const deleteSolution = async (req, res) => {
   }
 };
 
-// Admin approve solution
+// ✅ FIXED: Admin approve solution
 export const approveSolution = async (req, res) => {
   try {
+    console.log('🔍 Approve solution called by user:', req.user?.email, 'Role:', req.user?.role);
+    
     // Check if user is admin
     if (req.user.role !== 'admin') {
+      console.log('❌ Non-admin tried to approve:', req.user?.email);
       return res.status(403).json({ success: false, message: 'Admin access required' });
     }
     
@@ -177,17 +184,23 @@ export const approveSolution = async (req, res) => {
     solution.isApproved = true;
     await solution.save();
     
-    res.json({ success: true, message: 'Solution approved successfully' });
+    console.log('✅ Solution approved:', solution._id, 'by:', req.user.email);
+    
+    res.json({ success: true, message: 'Solution approved successfully', data: solution });
   } catch (error) {
+    console.error('Approve solution error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// Admin reject/delete solution
+// ✅ FIXED: Admin reject solution
 export const rejectSolution = async (req, res) => {
   try {
+    console.log('🔍 Reject solution called by user:', req.user?.email, 'Role:', req.user?.role);
+    
     // Check if user is admin
     if (req.user.role !== 'admin') {
+      console.log('❌ Non-admin tried to reject:', req.user?.email);
       return res.status(403).json({ success: false, message: 'Admin access required' });
     }
     
@@ -203,8 +216,11 @@ export const rejectSolution = async (req, res) => {
     
     await Solution.findByIdAndDelete(req.params.id);
     
+    console.log('✅ Solution rejected and deleted:', solution._id, 'by:', req.user.email);
+    
     res.json({ success: true, message: 'Solution rejected and deleted' });
   } catch (error) {
+    console.error('Reject solution error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -224,6 +240,7 @@ export const getPendingSolutions = async (req, res) => {
       
     res.json({ success: true, data: solutions });
   } catch (error) {
+    console.error('Get pending solutions error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -261,6 +278,7 @@ export const rateSolution = async (req, res) => {
     await solution.save();
     res.json({ success: true, averageRating: solution.averageRating });
   } catch (error) {
+    console.error('Rate solution error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -285,6 +303,7 @@ export const upvoteSolution = async (req, res) => {
     await solution.save();
     res.json({ success: true, upvotes: solution.upvotes.length });
   } catch (error) {
+    console.error('Upvote solution error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -309,6 +328,7 @@ export const downvoteSolution = async (req, res) => {
     await solution.save();
     res.json({ success: true, downvotes: solution.downvotes.length });
   } catch (error) {
+    console.error('Downvote solution error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -338,6 +358,7 @@ export const addComment = async (req, res) => {
     
     res.status(201).json({ success: true, data: solution.comments[solution.comments.length - 1] });
   } catch (error) {
+    console.error('Add comment error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -362,6 +383,7 @@ export const bookmarkSolution = async (req, res) => {
       res.json({ success: true, bookmarked: true, message: 'Added to bookmarks' });
     }
   } catch (error) {
+    console.error('Bookmark solution error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -375,6 +397,7 @@ export const getBookmarkedSolutions = async (req, res) => {
     });
     res.json({ success: true, data: user.bookmarkedSolutions });
   } catch (error) {
+    console.error('Get bookmarked solutions error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
